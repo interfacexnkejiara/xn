@@ -346,8 +346,8 @@
 </div>
 
  <script>
- // 仅使用HTTPS协议的验证地址
-const encryptedValidateUrl = "aHR0cHM6Ly9hLnhua2VqaS5pY3UvdmFsaWRhdGVfZG9tYWluLnBocA==";
+ 
+const encryptedValidateUrl = "aHR0cHM6Ly9hLnhua2VqaS5pY3UvdmFsaWRhdGVfZG9tYWluLnBocAog";
 
 function decryptUrl(encryptedUrl) {
     return atob(encryptedUrl);
@@ -355,72 +355,75 @@ function decryptUrl(encryptedUrl) {
 
 var liugao = new URLSearchParams(window.location.search);
 var encodedParam = liugao.get('c');
-var liu = encodedParam ? atob(encodedParam) : '';
+var liu = atob(encodedParam);
 
+// 修改为异步验证函数并返回Promise
 function validateDomain(url) {
-    const decryptedUrl = decryptUrl(encryptedValidateUrl);
-    
-    // 添加随机参数避免CDN缓存
-    const timestamp = new Date().getTime();
-    const requestUrl = `${decryptedUrl}?url=${encodeURIComponent(url)}&t=${timestamp}`;
-    
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+        const decryptedUrl = decryptUrl(encryptedValidateUrl);
+        
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', requestUrl, true); // 使用异步请求避免CDN超时问题
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                // 处理可能的CDN代理导致的状态码异常
-                if (xhr.status === 200) {
-                    resolve(xhr.responseText === 'true');
-                } else {
-                    // 尝试从响应文本中提取有效信息，兼容CDN转发场景
-                    try {
-                        const data = JSON.parse(xhr.responseText);
-                        resolve(data.valid === true);
-                    } catch (e) {
-                        resolve(false);
-                    }
-                }
+        xhr.open('GET', decryptedUrl + '?url=' + encodeURIComponent(url), true); // 改为异步
+        
+        // 处理请求成功
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.responseText === 'true');
+            } else {
+                reject(new Error('请求失败，状态码: ' + xhr.status));
             }
         };
-        // 设置超时处理
+        
+        // 处理网络错误
+        xhr.onerror = function() {
+            reject(new Error('网络错误，无法连接到验证服务器'));
+        };
+        
+        // 超时设置
         xhr.timeout = 5000;
         xhr.ontimeout = function() {
-            resolve(false);
+            reject(new Error('请求超时'));
         };
+        
         xhr.send();
     });
 }
 
+// 处理验证逻辑
 if (liu.includes("http")) {
-    validateDomain(liu).then(isValid => {
-        if (isValid) {
-            var container = document.querySelector('.container');
-            setTimeout(function() {
-                container.style.display = "none";
-            }, 1500);
-            // 处理CDN环境下的iframe跨域问题
-            var html = `<iframe class="content" onload="bindMouseWhee(this)" src="${liu}" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>`;
-            document.writeln(html);
-            console.log(liu);
-        } else {
-            // 隐藏加载动画，显示未授权提示
+    // 调用异步验证
+    validateDomain(liu)
+        .then(isValid => {
+            if (isValid) {
+                var square = document.getElementById("container");
+                setTimeout(function() {
+                    square.style.display = "none";
+                }, 1500);
+                var html='<iframe class="content" οnlοad="bindMouseWhee(this)" src='+liu+'></iframe>';
+                document.writeln(html);
+                console.log(liu);
+            } else {
+                // 隐藏加载动画，显示未授权提示
+                var container = document.querySelector('.container');
+                container.style.display = 'none';
+                
+                var unauthorizedMessage = document.getElementById('unauthorizedMessage');
+                unauthorizedMessage.style.display = 'block';
+                
+                console.log("域名不在白名单中，无法使用。");
+            }
+        })
+        .catch(error => {
+            console.error('验证过程出错:', error);
+            // 显示错误信息给用户
             var container = document.querySelector('.container');
             container.style.display = 'none';
             
             var unauthorizedMessage = document.getElementById('unauthorizedMessage');
+            unauthorizedMessage.querySelector('h2').textContent = '连接失败';
+            unauthorizedMessage.querySelector('p').textContent = '无法连接到验证服务器，请稍后重试。错误: ' + error.message;
             unauthorizedMessage.style.display = 'block';
-            
-            console.log("域名不在白名单中，无法使用。");
-        }
-    }).catch(error => {
-        console.error('验证失败:', error);
-        // 错误处理，显示未授权提示
-        var container = document.querySelector('.container');
-        container.style.display = 'none';
-        var unauthorizedMessage = document.getElementById('unauthorizedMessage');
-        unauthorizedMessage.style.display = 'block';
-    });
+        });
 } else {
     console.log("nourls");
 }
@@ -441,33 +444,6 @@ function bindMouseWhee(ifr){
         alert('跨域无法获取iframe加载document'+e);
     }
 }
-</script>
-<script type="text/javascript">
-        // 禁止右键点击
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        });
-        
-        // 禁止F12键
-        document.addEventListener('keydown', function(e) {
-            // F12键的keyCode是123
-            if (e.keyCode === 123) {
-                e.preventDefault();
-            }
-            // 禁止Ctrl+Shift+I
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
-                e.preventDefault();
-            }
-            // 禁止Ctrl+U (查看源代码)
-            if (e.ctrlKey && e.keyCode === 85) {
-                e.preventDefault();
-            }
-        });
-        
-        // 防止通过浏览器菜单打开开发者工具的简单防护
-        // 这不能完全阻止，但可以增加难度
-        window.ondevtoolschange = function(open) {
-            if (open) {
 </script>
 </body>
 </html>
